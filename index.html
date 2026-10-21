@@ -849,11 +849,11 @@ const normDoc=d=>{d.items=Array.isArray(d.items)?d.items:[];d.status=d.status||'
 function persistDoc(d){
   if(!neon)return Promise.resolve();
   const body=JSON.parse(JSON.stringify(d));
-  return queue('doc:'+d.id,async()=>ok(await neon.rpc('save_document',{d:body})));
+  return queue('doc:'+d.id,async()=>{ok(await neon.rpc('save_document',{d:body}));if(!me.admin)setTimeout(()=>refresh(true),300)});
 }
 function removeDocDoc(id){
   if(!neon)return Promise.resolve();
-  return queue('doc:'+id,async()=>ok(await neon.from('documents').delete().eq('id',id)));
+  return queue('doc:'+id,async()=>ok(await neon.rpc('delete_document',{doc_id:id})));
 }
 const actName=id=>db.find(p=>p.id===id)?.name||'';
 const sameSR=(a,b)=>(a||'').trim().toLowerCase()===(b||'').trim().toLowerCase();
