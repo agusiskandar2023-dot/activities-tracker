@@ -155,7 +155,7 @@ body.locked .wrap,body.locked #modal{visibility:hidden}
 .rst{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}.rstf{display:flex;gap:6px;flex:1;min-width:220px}.rstf[hidden]{display:none}.rstf input{font-size:13px;padding:6px 8px}
 .urow2{padding:10px 0;border-bottom:1px solid var(--line)}.urow2:last-child{border-bottom:0}.urow2 b{font-size:13px}.urow2 .em{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 @media (max-width:480px){.acc{grid-template-columns:1fr 1fr}.acc label.adm{grid-column:1/-1}}
-.noadm .bcard,.noadm .dm-backup,.noadm #expXlsx,.noadm #expJson{display:none!important}
+.noadm .bcard,.noadm .dm-backup,.noadm .dm-admin,.noadm #expXlsx,.noadm #expJson{display:none!important}
 .lock-actions{display:flex;gap:8px;justify-content:flex-end}
 .lock-actions .btn{flex:1;padding:11px}
 .lock-help{font-size:12px!important}
@@ -673,9 +673,9 @@ input.capped{border-color:var(--warn)!important;background:var(--peach-soft)!imp
     </div>
     <div class="err" id="impMsg" hidden></div>
     <div><b>Akun</b><span id="acctInfo">–</span></div>
-    <div class="row"><button class="btn sm" id="manageUsers" type="button" hidden>Kelola pengguna</button><button class="btn sm" id="refreshNow" type="button">Muat ulang data</button><button class="btn sm danger" id="logoutBtn" type="button">Keluar</button></div>
-    <div><b>Tampilan</b><span>Terang adalah bawaan. Pilihan ini hanya berlaku di perangkat ini.</span></div>
-    <div class="row" role="group" aria-label="Tampilan"><button class="btn sm thm" data-thm="light" type="button">Terang</button><button class="btn sm thm" data-thm="dark" type="button">Gelap</button><button class="btn sm thm" data-thm="system" type="button">Ikuti perangkat</button></div>
+    <div class="row"><button class="btn sm" id="manageUsers" type="button" hidden>Kelola pengguna</button><button class="btn sm dm-admin" id="refreshNow" type="button">Muat ulang data</button><button class="btn sm danger" id="logoutBtn" type="button">Keluar</button></div>
+    <div class="dm-admin"><b>Tampilan</b><span>Terang adalah bawaan. Pilihan ini hanya berlaku di perangkat ini.</span></div>
+    <div class="row dm-admin" role="group" aria-label="Tampilan"><button class="btn sm thm" data-thm="light" type="button">Terang</button><button class="btn sm thm" data-thm="dark" type="button">Gelap</button><button class="btn sm thm" data-thm="system" type="button">Ikuti perangkat</button></div>
   </div>
   <section id="dashView" class="dash" hidden></section>
   <section id="docView" class="docs" hidden></section>
