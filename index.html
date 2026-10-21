@@ -148,6 +148,12 @@ body.locked .wrap,body.locked #modal{visibility:hidden}
 .lock .who{font-family:var(--mono);font-size:12px;background:var(--sunk);border-radius:8px;padding:8px 10px;overflow-wrap:anywhere}
 .urow{display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .urow:last-child{border-bottom:0}.urow b{display:block;font-size:13px}.urow span{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.ro .dhead>.btn,.noadm label[for="impFile"],.ro .dbtns .btn,.ro [data-addsr],.ro [data-addpo],.ro [data-editsr],.ro [data-additem],.ro [data-edititem],.ro [data-reg],.ro [data-add],.ro [data-edit],.ro #editProj,.ro #newProj,.ro #bnNew{display:none!important}
+.acc{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
+.acc label{flex-direction:row;align-items:center;gap:6px;font-size:12px}
+.acc select{font-size:13px;padding:6px 8px}
+.urow2{padding:10px 0;border-bottom:1px solid var(--line)}.urow2:last-child{border-bottom:0}.urow2 b{font-size:13px}.urow2 .em{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+@media (max-width:480px){.acc{grid-template-columns:1fr 1fr}.acc label.adm{grid-column:1/-1}}
 .lock-actions{display:flex;gap:8px;justify-content:flex-end}
 .lock-actions .btn{flex:1;padding:11px}
 .lock-help{font-size:12px!important}
@@ -760,11 +766,17 @@ const norm=p=>{
 
 /* ---------- penyimpanan: Neon (Data API + RLS) ---------- */
 const NEON={auth:'https://ep-soft-sun-a1ovuh76.neonauth.ap-southeast-1.aws.neon.tech/neondb/auth',api:'https://ep-soft-sun-a1ovuh76.apirest.ap-southeast-1.aws.neon.tech/neondb/rest/v1',sdk:'https://cdn.jsdelivr.net/npm/@neondatabase/neon-js@0.7.0-beta/+esm'};
-let neon=null, me={uid:null,email:'',name:'',role:null}, lastLoad=0;
+let neon=null, me={uid:null,email:'',name:'',admin:false,perms:{activity:'none',documents:'none'}}, lastLoad=0;
+const pr=k=>me.admin?'edit':(me.perms&&me.perms[k])||'none';
+const canAct=()=>pr('activity')!=='none', canDoc=()=>pr('documents')!=='none';
+const editAct=()=>pr('activity')==='edit', editDoc=()=>pr('documents')==='edit';
+const hasAny=()=>me.admin||canAct()||canDoc();
+const ACC={none:'Tidak ada',view:'Lihat',edit:'Ubah'};
+const accessLabel=()=>me.admin?'Admin (semua menu, kelola pengguna)':`Activity: ${ACC[pr('activity')]} · Documents: ${ACC[pr('documents')]}`;
 const chains={};
 function storeErr(e){
   const m=String((e&&(e.message||e.code))||'');
-  if(/row-level security|permission denied|42501/i.test(m)){readOnly=true;render();toast('Tidak bisa menyimpan: akses Anda hanya untuk melihat.')}
+  if(/row-level security|permission denied|42501/i.test(m)){toast('Tidak bisa menyimpan: akses Anda di menu ini hanya untuk melihat.');refresh(true)}
   else if(/JWT|token|401|unauthor/i.test(m)){toast('Sesi berakhir. Silakan masuk lagi.');showLogin('signin')}
   else toast('Gagal menyimpan ke Neon. Periksa koneksi lalu coba lagi.');
   console.error(e);
@@ -782,8 +794,7 @@ function removeDoc(id){
 }
 async function loadAll(){
   const j=ok(await neon.rpc('get_all'));
-  me.role=j.role||null; me.uid=j.uid||me.uid;
-  readOnly=me.role!=='editor';
+  me.admin=!!j.admin; me.perms=j.perms||{activity:'none',documents:'none'}; me.uid=j.uid||me.uid;
   db=(j.activities||[]).map(norm);
   docs=(j.documents||[]).map(normDoc);
   if(mode==='loading'){mode='cloud';sel=db.slice().sort((a,b)=>(a.end||'').localeCompare(b.end||''))[0]?.id||null}
@@ -792,7 +803,7 @@ async function loadAll(){
   return j;
 }
 async function refresh(force){
-  if(!neon||!me.role)return;
+  if(!neon||!hasAny())return;
   if(!force&&($('#modal').innerHTML.trim()||Object.keys(chains).length&&Date.now()-lastLoad<5000))return;
   try{await loadAll();render()}catch(e){console.warn('refresh',e)}
 }
@@ -1208,6 +1219,7 @@ function donut(parts,total){const S=160,r=62,c=2*Math.PI*r,gap=total>1?3:0;let o
 function renderDash(){
   const el=$('#dashView');
   if(mode==='loading'){el.innerHTML='<div class="skel" style="height:96px"></div><div class="grid2"><div class="skel" style="height:220px"></div><div class="skel" style="height:220px"></div></div>';return}
+  if(mode==='cloud'&&!canAct()){renderDocDash(el);return}
   if(!db.length){el.innerHTML=`<div class="panel empty"><b style="color:var(--fg);font-size:15px">Dashboard masih kosong</b><br>Tambahkan activity pertama, ringkasannya akan muncul di sini.<br><br><button class="btn primary" type="button" onclick="projForm()">+ Activity baru</button></div>`;return}
   const N=db.length, cnt=k=>db.filter(p=>p.status===k).length;
   const active=db.filter(p=>!['Selesai','Belum Mulai','Postpone','Cancel'].includes(p.status));
@@ -1256,7 +1268,7 @@ function renderDash(){
         <div class="sbar" role="img" aria-label="Komposisi status">${stKeys.map(k=>`<i style="flex:${cnt(k)};background:${STC[k]}" title="${k}: ${cnt(k)}"></i>`).join('')}</div>
         <div class="lgrid">${Object.keys(STATUS).map(k=>`<button class="lg" type="button" data-status="${k}"><span class="sw" style="background:${STC[k]}"></span><span class="ln">${k}</span><b>${cnt(k)}</b></button>`).join('')}</div>
       </div>
-      ${(()=>{const soon=docs.filter(d=>{const n=sisaHari(d.end);return n!==null&&n>=0&&n<=90}).sort((a,b)=>a.end.localeCompare(b.end));
+      ${!canDoc()?'':(()=>{const soon=docs.filter(d=>{const n=sisaHari(d.end);return n!==null&&n>=0&&n<=90}).sort((a,b)=>a.end.localeCompare(b.end));
         return `<div class="panel"><div class="panel-h"><h3>SR segera berakhir</h3><span class="code">${soon.length} · ≤ 90 hari</span></div>
         ${soon.length?soon.slice(0,6).map(d=>`<button class="srsoon" type="button" data-srgo="${esc(d.sr)}"><span class="srtxt"><b class="code">${esc(d.sr)}</b><span>${esc(d.title||'')}</span></span>${sisaBadge(d.end,d.status)}</button>`).join('')+(soon.length>6?`<button class="linkbtn" type="button" data-srall style="margin-top:6px">Lihat semua (${soon.length})</button>`:''):'<div class="empty" style="padding:12px">Tidak ada SR yang berakhir dalam 90 hari.</div>'}</div>`})()}
       <div class="mcard">
@@ -1291,10 +1303,44 @@ function renderDash(){
   el.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>{mDetail=false;fStatus=b.dataset.status;$('#q').value='';$('#fJenis').value='';const l=filtered();if(l.length)sel=l[0].id;tab='ringkasan';setView('activity')});
 }
 
+function renderDocDash(el){
+  const nPR=docs.reduce((a,d)=>a+d.items.filter(i=>i.type==='PR').length,0), nPO=docs.reduce((a,d)=>a+d.items.filter(i=>i.type==='PO').length,0);
+  const soon=docs.filter(d=>{const n=sisaHari(d.end);return n!==null&&n>=0&&n<=90}).sort((a,b)=>a.end.localeCompare(b.end));
+  const aktif=docs.filter(d=>{const n=sisaHari(d.end);return n!==null&&n>=0});
+  const sc=k=>docs.filter(d=>d.status===k).length;
+  const ico=p=>`<span class="bki"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg></span>`;
+  el.innerHTML=`
+  <div class="dhead"><div><h2>Halo, ini ringkasan dokumen</h2>
+    <p>${TODAY.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${soon.length?`${soon.length} SR berakhir dalam 90 hari`:'tidak ada SR yang segera berakhir'}</p></div></div>
+  <div class="bkpis">
+    <div class="bk">${ico('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path>')}<div class="v">${docs.length}</div><div class="k">Total SR</div><div class="s">${aktif.length} periode masih berjalan</div></div>
+    <div class="bk">${ico('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path>')}<div class="v">${nPR}</div><div class="k">Dokumen PR</div><div class="s">tercatat di semua SR</div></div>
+    <div class="bk ${soon.length?'alert':''}">${ico('<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>')}<div class="v">${soon.length}</div><div class="k">Segera berakhir</div><div class="s">≤ 90 hari</div></div>
+    <div class="bk">${ico('<path d="M20 6L9 17l-5-5"></path>')}<div class="v">${nPO}</div><div class="k">Dokumen PO</div><div class="s">tercatat di semua SR</div></div>
+  </div>
+  <div class="bgrid">
+    <div class="panel"><div class="panel-h"><h3>SR segera berakhir</h3><button class="linkbtn" type="button" data-go="documents">Lihat semua</button></div>
+      ${soon.length?soon.slice(0,8).map(d=>`<button class="srsoon" type="button" data-srgo="${esc(d.sr)}"><span class="srtxt"><b class="code">${esc(d.sr)}</b><span>${esc(d.title||'')}</span></span>${sisaBadge(d.end,d.status)}</button>`).join(''):'<div class="empty" style="padding:12px">Tidak ada SR yang berakhir dalam 90 hari.</div>'}
+    </div>
+    <div class="panel"><div class="panel-h"><h3>Status SR</h3><span class="code">${docs.length} SR</span></div>
+      <div class="dlist">${Object.keys(SR_ST).map(k=>`<div class="ditem"><b>${k}</b><span>${pill(String(sc(k)),SR_ST[k])}</span></div>`).join('')}</div>
+    </div>
+  </div>`;
+  el.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>setView(b.dataset.go));
+  el.querySelectorAll('[data-srgo]').forEach(b=>b.onclick=()=>{dQ=b.dataset.srgo;dSisa='';dSt='';setView('documents')});
+}
+
 function syncHdr(){const h=document.querySelector('header.top');if(!h)return;const cs=getComputedStyle(h);const top=parseFloat(getComputedStyle(document.documentElement).paddingTop)||0;document.documentElement.style.setProperty('--hdrH',(cs.position==='sticky'?h.offsetHeight+top:top)+'px')}
 addEventListener('resize',syncHdr);
 function render(){
   syncHdr();
+  if(mode==='cloud'){
+    if(view==='activity'&&!canAct())view=canDoc()?'documents':'dashboard';
+    if(view==='documents'&&!canDoc())view='dashboard';
+    readOnly=view==='documents'?!editDoc():!editAct();
+    document.querySelectorAll('.vbtn[data-v="activity"]').forEach(b=>b.hidden=!canAct());
+    document.querySelectorAll('.vbtn[data-v="documents"]').forEach(b=>b.hidden=!canDoc());
+  }
   document.body.classList.toggle('ro',readOnly);
   document.body.classList.toggle('m-detail',mDetail&&view==='activity'&&!!sel);
   document.querySelectorAll('.vbtn').forEach(b=>{b.classList.toggle('on',b.dataset.v===view);b.setAttribute('aria-current',b.dataset.v===view?'page':'false')});
@@ -1304,7 +1350,7 @@ function render(){
   renderOverview();renderSide();renderMain();
   const n=db.filter(p=>p.sample).length, sb=$('#sampleBtn');
   sb.hidden=!n||readOnly; if(!sb.dataset.c)sb.textContent=`Hapus ${n} contoh`;
-  $('#storeNote').textContent=mode==='cloud'?(readOnly?'Tersimpan di database Neon. Anda punya akses lihat saja.':'Tersimpan di database Neon dan dimuat ulang otomatis tiap 30 detik. Gunakan menu Data untuk backup rutin.'):'Menghubungkan ke database…';
+  $('#storeNote').textContent=mode==='cloud'?(readOnly?'Tersimpan di database Neon. Di menu ini Anda punya akses lihat saja.':'Tersimpan di database Neon dan dimuat ulang otomatis tiap 30 detik. Gunakan menu Data untuk backup rutin.'):'Menghubungkan ke database…';
 }
 $('#sampleBtn').onclick=async function(){
   if(!this.dataset.c){this.dataset.c=1;this.textContent='Yakin hapus semua contoh?';setTimeout(()=>{delete this.dataset.c;render()},4000);return}
@@ -1366,13 +1412,12 @@ $('#newProj').onclick=()=>projForm();
 /* ---------- login: Neon Auth ---------- */
 document.body.classList.add('locked');
 let lockMode='loading';
-const roleLabel=r=>r==='editor'?'Editor':r==='viewer'?'Viewer (lihat saja)':'Belum diberi akses';
 function showLogin(m,msg){
   lockMode=m;document.body.classList.add('locked');$('#lock').hidden=false;$('#modal').innerHTML='';
   const L={
     signin:['Masuk','Masuk dengan akun Activities Tracker Anda.',[0,1,1],'Masuk','Belum punya akun? Daftar'],
-    signup:['Daftar akun','Akun baru perlu diberi akses oleh editor sebelum bisa melihat data.',[1,1,1],'Daftar','Sudah punya akun? Masuk'],
-    pending:['Menunggu akses','Akun Anda sudah terdaftar, tapi belum diberi akses. Kirim email di bawah ke editor (pemilik aplikasi) agar diberi peran viewer atau editor.',[0,0,0],'Cek lagi',''],
+    signup:['Daftar akun','Akun baru perlu diberi akses oleh admin sebelum bisa melihat data.',[1,1,1],'Daftar','Sudah punya akun? Masuk'],
+    pending:['Menunggu akses','Akun Anda sudah terdaftar, tapi belum diberi akses. Kirim email di bawah ke admin (pemilik aplikasi) agar diberi akses menu.',[0,0,0],'Cek lagi',''],
     loading:['Memuat…','',[0,0,0],'',''],
     error:['Tidak bisa terhubung','Periksa koneksi internet lalu coba lagi. Asal halaman: '+location.origin,[0,0,0],'Coba lagi','']
   }[m];
@@ -1404,9 +1449,10 @@ async function afterAuth(){
   if(!s||!s.session){showLogin('signin');return}
   me.email=s.user&&s.user.email||'';me.name=s.user&&s.user.name||'';me.uid=s.user&&s.user.id||null;
   try{await loadAll()}catch(e){console.error(e);showLogin('error',authMsg(e));return}
-  if(!me.role){showLogin('pending');return}
-  $('#acctInfo').textContent=`${me.name?me.name+' · ':''}${me.email} — ${roleLabel(me.role)}`;
-  $('#manageUsers').hidden=me.role!=='editor';
+  if(!hasAny()){showLogin('pending');return}
+  $('#acctInfo').textContent=`${me.name?me.name+' · ':''}${me.email} — ${accessLabel()}`;
+  $('#manageUsers').hidden=!me.admin;
+  document.body.classList.toggle('noadm',!me.admin);
   unlock();render();
 }
 $('#lockForm').onsubmit=async e=>{
@@ -1426,22 +1472,31 @@ $('#lockForm').onsubmit=async e=>{
   }catch(x){err(authMsg(x))}
   finally{go.disabled=false}
 };
-async function signOut(){try{await neon.auth.signOut()}catch(e){}me={uid:null,email:'',name:'',role:null};db=[];docs=[];mode='loading';$('#dataMenu').hidden=true;showLogin('signin')}
+async function signOut(){try{await neon.auth.signOut()}catch(e){}me={uid:null,email:'',name:'',admin:false,perms:{activity:'none',documents:'none'}};db=[];docs=[];mode='loading';$('#dataMenu').hidden=true;showLogin('signin')}
 $('#lockCancel').onclick=signOut;
 $('#logoutBtn').onclick=signOut;
 $('#refreshNow').onclick=async()=>{await refresh(true);toast('Data dimuat ulang')};
 $('#manageUsers').onclick=async()=>{
   $('#dataMenu').hidden=true;
   const m=$('#modal');
-  m.innerHTML=`<div class="scrim" id="uScrim"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="uT"><h3 id="uT">Kelola pengguna</h3><p style="margin:-6px 0 12px;color:var(--muted);font-size:13px">Pengguna mendaftar sendiri dari halaman login, lalu Anda beri peran di sini. Viewer hanya bisa melihat; editor bisa mengubah data.</p><div id="uList"><div class="empty">Memuat…</div></div><div class="foot"><button class="btn" type="button" id="uClose">Tutup</button></div></div></div>`;
+  m.innerHTML=`<div class="scrim" id="uScrim"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="uT"><h3 id="uT">Kelola pengguna</h3><p style="margin:-6px 0 12px;color:var(--muted);font-size:13px">Pengguna mendaftar sendiri dari halaman login, lalu Anda atur aksesnya di sini. <b>Lihat</b> = hanya melihat, <b>Ubah</b> = bisa menambah, mengubah, menghapus. Menu yang <b>Tidak ada</b> disembunyikan. Dashboard otomatis hanya menampilkan data yang boleh dilihat.</p><div id="uList"><div class="empty">Memuat…</div></div><div class="foot"><button class="btn" type="button" id="uClose">Tutup</button></div></div></div>`;
   const close=()=>{m.innerHTML=''};$('#uClose').onclick=close;$('#uScrim').onclick=e=>{if(e.target.id==='uScrim')close()};
+  const opt=(v)=>['none','view','edit'].map(k=>`<option value="${k}"${k===v?' selected':''}>${ACC[k]}</option>`).join('');
   try{
     const users=ok(await neon.rpc('list_users'))||[];
-    $('#uList').innerHTML=users.map(u=>`<div class="urow"><div><b>${esc(u.name||'(tanpa nama)')}${u.user_id===me.uid?' · Anda':''}</b><span>${esc(u.email)}</span></div>${u.user_id===me.uid?`<span>${roleLabel(u.role)}</span>`:`<select data-u="${esc(u.user_id)}" aria-label="Peran ${esc(u.email)}"><option value="">Belum diberi akses</option><option value="viewer"${u.role==='viewer'?' selected':''}>Viewer</option><option value="editor"${u.role==='editor'?' selected':''}>Editor</option></select>`}</div>`).join('')||'<div class="empty">Belum ada pengguna.</div>';
-    $('#uList').querySelectorAll('select').forEach(s=>s.onchange=async()=>{
-      s.disabled=true;
-      try{ok(await neon.rpc('set_role',{target:s.dataset.u,new_role:s.value||null}));toast('Peran disimpan')}catch(e){toast('Gagal menyimpan peran');console.error(e)}
-      finally{s.disabled=false}
+    $('#uList').innerHTML=users.map(u=>{const p=u.perms||{},self=u.user_id===me.uid;
+      return `<div class="urow2" data-u="${esc(u.user_id)}"><b>${esc(u.name||'(tanpa nama)')}${self?' · Anda':''}</b><span class="em">${esc(u.email)}</span>${self?`<span class="em">Admin (semua menu)</span>`:
+      `<div class="acc"><label class="adm"><input type="checkbox" data-k="admin"${u.is_admin?' checked':''} style="width:auto"> Admin</label><label>Activity<select data-k="activity"${u.is_admin?' disabled':''}>${opt(p.activity||'none')}</select></label><label>Documents<select data-k="documents"${u.is_admin?' disabled':''}>${opt(p.documents||'none')}</select></label></div>`}</div>`}).join('')||'<div class="empty">Belum ada pengguna.</div>';
+    $('#uList').querySelectorAll('.urow2').forEach(row=>{
+      const ctl=row.querySelectorAll('[data-k]');
+      ctl.forEach(c=>c.onchange=async()=>{
+        const adm=row.querySelector('[data-k="admin"]').checked;
+        row.querySelectorAll('select').forEach(s=>s.disabled=adm);
+        ctl.forEach(x=>x.disabled=true);
+        try{ok(await neon.rpc('set_access',{target:row.dataset.u,admin:adm,activity:row.querySelector('[data-k="activity"]').value,documents:row.querySelector('[data-k="documents"]').value}));toast('Akses disimpan')}
+        catch(e){toast('Gagal menyimpan akses');console.error(e)}
+        finally{ctl.forEach(x=>x.disabled=false);row.querySelectorAll('select').forEach(s=>s.disabled=row.querySelector('[data-k="admin"]').checked)}
+      });
     });
   }catch(e){$('#uList').innerHTML='<div class="empty">Daftar pengguna tidak bisa dimuat.</div>';console.error(e)}
 };
