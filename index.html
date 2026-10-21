@@ -1524,6 +1524,11 @@ boot();
 
 render();
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+/* pembaruan otomatis: muat ulang halaman jika ada versi aplikasi baru */
+const APP_V='20261021162149';
+async function checkVer(){try{const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'});const j=await r.json();if(j.v&&j.v!==APP_V&&!$('#modal').innerHTML.trim()&&!Object.keys(chains).length){location.reload()}}catch(e){}}
+setInterval(()=>{if(!document.hidden)checkVer()},60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkVer()});
 </script>
 
 </body></html>
