@@ -152,6 +152,7 @@ body.locked .wrap,body.locked #modal{visibility:hidden}
 .acc{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
 .acc label{flex-direction:row;align-items:center;gap:6px;font-size:12px}
 .acc select{font-size:13px;padding:6px 8px}
+.rst{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}.rstf{display:flex;gap:6px;flex:1;min-width:220px}.rstf[hidden]{display:none}.rstf input{font-size:13px;padding:6px 8px}
 .urow2{padding:10px 0;border-bottom:1px solid var(--line)}.urow2:last-child{border-bottom:0}.urow2 b{font-size:13px}.urow2 .em{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 @media (max-width:480px){.acc{grid-template-columns:1fr 1fr}.acc label.adm{grid-column:1/-1}}
 .lock-actions{display:flex;gap:8px;justify-content:flex-end}
@@ -638,7 +639,7 @@ input.capped{border-color:var(--warn)!important;background:var(--peach-soft)!imp
     <div class="lock-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></div>
     <div><div class="lock-brand">Activities Tracker</div><h2 id="lockTitle">Memuat…</h2><p id="lockSub"></p></div>
     <label for="lgName" id="lgNameLbl" hidden>Nama<input id="lgName" type="text" autocomplete="name"></label>
-    <label for="lgEmail" id="lgEmailLbl" hidden>Email<input id="lgEmail" type="email" autocomplete="username" inputmode="email"></label>
+    <label for="lgEmail" id="lgEmailLbl" hidden>Nama pengguna atau email<input id="lgEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="mis. siva atau nama@email.com"></label>
     <label for="lgPass" id="lgPassLbl" hidden>Password<input id="lgPass" type="password" autocomplete="current-password" minlength="8"></label>
     <div class="who" id="lgWho" hidden></div>
     <div class="err" id="lockErr" hidden></div>
@@ -772,6 +773,10 @@ const canAct=()=>pr('activity')!=='none', canDoc=()=>pr('documents')!=='none';
 const editAct=()=>pr('activity')==='edit', editDoc=()=>pr('documents')==='edit';
 const hasAny=()=>me.admin||canAct()||canDoc();
 const ACC={none:'Tidak ada',view:'Lihat',edit:'Ubah'};
+const UDOM='activities.local';
+const toEmail=v=>{v=String(v||'').trim().toLowerCase();return v.includes('@')?v:(v?v+'@'+UDOM:'')};
+const validId=v=>{v=String(v||'').trim().toLowerCase();return v.includes('@')?/^\S+@\S+\.\S+$/.test(v):/^[a-z0-9._-]{3,30}$/.test(v)};
+const shownId=e=>String(e||'').endsWith('@'+UDOM)?String(e).slice(0,-UDOM.length-1):String(e||'');
 const accessLabel=()=>me.admin?'Admin (semua menu, kelola pengguna)':`Activity: ${ACC[pr('activity')]} · Documents: ${ACC[pr('documents')]}`;
 const chains={};
 function storeErr(e){
@@ -1415,9 +1420,9 @@ let lockMode='loading';
 function showLogin(m,msg){
   lockMode=m;document.body.classList.add('locked');$('#lock').hidden=false;$('#modal').innerHTML='';
   const L={
-    signin:['Masuk','Masuk dengan akun Activities Tracker Anda.',[0,1,1],'Masuk','Belum punya akun? Daftar'],
-    signup:['Daftar akun','Akun baru perlu diberi akses oleh admin sebelum bisa melihat data.',[1,1,1],'Daftar','Sudah punya akun? Masuk'],
-    pending:['Menunggu akses','Akun Anda sudah terdaftar, tapi belum diberi akses. Kirim email di bawah ke admin (pemilik aplikasi) agar diberi akses menu.',[0,0,0],'Cek lagi',''],
+    signin:['Masuk','Masuk dengan nama pengguna atau email dan password Anda.',[0,1,1],'Masuk','Belum punya akun? Daftar'],
+    signup:['Daftar akun','Buat nama pengguna (tanpa spasi) atau pakai email. Akun baru perlu diberi akses oleh admin sebelum bisa melihat data.',[1,1,1],'Daftar','Sudah punya akun? Masuk'],
+    pending:['Menunggu akses','Akun Anda sudah terdaftar, tapi belum diberi akses. Kirim nama pengguna di bawah ke admin (pemilik aplikasi) agar diberi akses menu.',[0,0,0],'Cek lagi',''],
     loading:['Memuat…','',[0,0,0],'',''],
     error:['Tidak bisa terhubung','Periksa koneksi internet lalu coba lagi. Asal halaman: '+location.origin,[0,0,0],'Coba lagi','']
   }[m];
@@ -1426,7 +1431,7 @@ function showLogin(m,msg){
   $('#lgPass').setAttribute('autocomplete',m==='signup'?'new-password':'current-password');
   $('#lockGo').hidden=!L[3];$('#lockGo').textContent=L[3];
   $('#lockCancel').hidden=m!=='pending';
-  $('#lgWho').hidden=m!=='pending';$('#lgWho').textContent=me.email||'';
+  $('#lgWho').hidden=m!=='pending';$('#lgWho').textContent=shownId(me.email);
   $('#lockHelp').innerHTML=L[4]?`<button type="button" class="lock-switch" id="lgSwitch">${L[4]}</button>`:'';
   const sw=$('#lgSwitch');if(sw)sw.onclick=()=>showLogin(m==='signin'?'signup':'signin');
   const er=$('#lockErr');er.hidden=!msg;er.textContent=msg||'';
@@ -1435,8 +1440,8 @@ function showLogin(m,msg){
 function unlock(){$('#lock').hidden=true;document.body.classList.remove('locked')}
 function authMsg(e){
   const m=String((e&&(e.message||e.code||e.statusText))||'');
-  if(/invalid.*(email|password)|credential|INVALID_EMAIL_OR_PASSWORD/i.test(m))return 'Email atau password salah.';
-  if(/already|exists|USER_ALREADY_EXISTS/i.test(m))return 'Email ini sudah terdaftar. Silakan masuk.';
+  if(/invalid.*(email|password)|credential|INVALID_EMAIL_OR_PASSWORD/i.test(m))return 'Nama pengguna/email atau password salah.';
+  if(/already|exists|USER_ALREADY_EXISTS/i.test(m))return 'Nama pengguna/email ini sudah terdaftar. Pilih yang lain atau masuk.';
   if(/password.*(short|least)|PASSWORD_TOO_SHORT/i.test(m))return 'Password minimal 8 karakter.';
   if(/origin|forbidden|403|csrf/i.test(m))return 'Domain aplikasi ini belum diizinkan di Neon Auth ('+location.origin+').';
   if(/fetch|network|Failed/i.test(m))return 'Tidak bisa terhubung ke server login ('+location.origin+'). Periksa koneksi.';
@@ -1450,7 +1455,7 @@ async function afterAuth(){
   me.email=s.user&&s.user.email||'';me.name=s.user&&s.user.name||'';me.uid=s.user&&s.user.id||null;
   try{await loadAll()}catch(e){console.error(e);showLogin('error',authMsg(e));return}
   if(!hasAny()){showLogin('pending');return}
-  $('#acctInfo').textContent=`${me.name?me.name+' · ':''}${me.email} — ${accessLabel()}`;
+  $('#acctInfo').textContent=`${me.name?me.name+' · ':''}${shownId(me.email)} — ${accessLabel()}`;
   $('#manageUsers').hidden=!me.admin;
   document.body.classList.toggle('noadm',!me.admin);
   unlock();render();
@@ -1459,8 +1464,8 @@ $('#lockForm').onsubmit=async e=>{
   e.preventDefault();
   const go=$('#lockGo'),err=t=>{const er=$('#lockErr');er.textContent=t;er.hidden=false};
   if(lockMode==='pending'||lockMode==='error'){if(!neon)return boot();return afterAuth()}
-  const email=$('#lgEmail').value.trim(),password=$('#lgPass').value,name=$('#lgName').value.trim();
-  if(!/^\S+@\S+\.\S+$/.test(email)){err('Masukkan email yang valid.');return}
+  const rawId=$('#lgEmail').value,email=toEmail(rawId),password=$('#lgPass').value,name=$('#lgName').value.trim();
+  if(!validId(rawId)){err('Nama pengguna 3–30 karakter: huruf kecil, angka, titik, garis bawah, atau strip (tanpa spasi). Atau isi email yang valid.');return}
   if(password.length<8){err('Password minimal 8 karakter.');return}
   if(lockMode==='signup'&&!name){err('Isi nama Anda.');return}
   go.disabled=true;
@@ -1485,9 +1490,14 @@ $('#manageUsers').onclick=async()=>{
   try{
     const users=ok(await neon.rpc('list_users'))||[];
     $('#uList').innerHTML=users.map(u=>{const p=u.perms||{},self=u.user_id===me.uid;
-      return `<div class="urow2" data-u="${esc(u.user_id)}"><b>${esc(u.name||'(tanpa nama)')}${self?' · Anda':''}</b><span class="em">${esc(u.email)}</span>${self?`<span class="em">Admin (semua menu)</span>`:
-      `<div class="acc"><label class="adm"><input type="checkbox" data-k="admin"${u.is_admin?' checked':''} style="width:auto"> Admin</label><label>Activity<select data-k="activity"${u.is_admin?' disabled':''}>${opt(p.activity||'none')}</select></label><label>Documents<select data-k="documents"${u.is_admin?' disabled':''}>${opt(p.documents||'none')}</select></label></div>`}</div>`}).join('')||'<div class="empty">Belum ada pengguna.</div>';
+      return `<div class="urow2" data-u="${esc(u.user_id)}"><b>${esc(u.name||'(tanpa nama)')}${self?' · Anda':''}</b><span class="em">${esc(shownId(u.email))}</span>${self?`<span class="em">Admin (semua menu)</span>`:
+      `<div class="acc"><label class="adm"><input type="checkbox" data-k="admin"${u.is_admin?' checked':''} style="width:auto"> Admin</label><label>Activity<select data-k="activity"${u.is_admin?' disabled':''}>${opt(p.activity||'none')}</select></label><label>Documents<select data-k="documents"${u.is_admin?' disabled':''}>${opt(p.documents||'none')}</select></label></div><div class="rst"><button type="button" class="btn sm" data-rst>Reset password</button><span class="rstf" hidden><input type="text" data-np placeholder="Password baru (min. 8)" autocomplete="off"><button type="button" class="btn sm primary" data-rsgo>Simpan</button></span></div>`}</div>`}).join('')||'<div class="empty">Belum ada pengguna.</div>';
     $('#uList').querySelectorAll('.urow2').forEach(row=>{
+      const rb=row.querySelector('[data-rst]');
+      if(rb){const f=row.querySelector('.rstf');rb.onclick=()=>{f.hidden=!f.hidden;if(!f.hidden)f.querySelector('input').focus()};
+        row.querySelector('[data-rsgo]').onclick=async function(){const np=f.querySelector('input').value;if(np.length<8){toast('Password minimal 8 karakter');return}
+          this.disabled=true;try{const r=await neon.auth.admin.setUserPassword({userId:row.dataset.u,newPassword:np});if(r&&r.error)throw r.error;f.hidden=true;f.querySelector('input').value='';toast('Password direset. Beri tahu penggunanya.')}
+          catch(e){console.error(e);toast('Reset gagal dari aplikasi. Minta Claude mereset password akun ini.')}finally{this.disabled=false}}}
       const ctl=row.querySelectorAll('[data-k]');
       ctl.forEach(c=>c.onchange=async()=>{
         const adm=row.querySelector('[data-k="admin"]').checked;
