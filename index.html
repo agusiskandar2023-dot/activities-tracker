@@ -156,6 +156,18 @@ body.locked .wrap,body.locked #modal{visibility:hidden}
 .urow2{padding:10px 0;border-bottom:1px solid var(--line)}.urow2:last-child{border-bottom:0}.urow2 b{font-size:13px}.urow2 .em{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 @media (max-width:480px){.acc{grid-template-columns:1fr 1fr}.acc label.adm{grid-column:1/-1}}
 .noadm .bcard,.noadm .dm-backup,.noadm #expXlsx,.noadm #expJson{display:none!important}
+.dlg.wide{max-width:860px}
+.afil{display:grid;grid-template-columns:minmax(0,1fr) 170px 140px 140px;gap:8px;margin-bottom:10px}
+@media (max-width:700px){.afil{grid-template-columns:1fr 1fr}.afil input[type=search]{grid-column:1/-1}}
+.afil input,.afil select{font-size:13px;padding:7px 9px}
+.arow2{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}.arow2:last-child{border-bottom:0}
+.ahd{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.ahd .t{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.ahd b{font-weight:700}
+.aobj{margin-top:3px}.aobj span{color:var(--muted)}
+.achg{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px}
+.achg li{background:var(--sunk);border-radius:8px;padding:5px 8px;font-size:12px;overflow-wrap:anywhere}
+.achg .f{font-weight:700;margin-right:6px}.achg del{color:var(--bad);text-decoration:line-through}.achg ins{color:var(--ok);text-decoration:none}
 .lock-actions{display:flex;gap:8px;justify-content:flex-end}
 .lock-actions .btn{flex:1;padding:11px}
 .lock-help{font-size:12px!important}
@@ -673,7 +685,7 @@ input.capped{border-color:var(--warn)!important;background:var(--peach-soft)!imp
     </div>
     <div class="err" id="impMsg" hidden></div>
     <div><b>Akun</b><span id="acctInfo">–</span></div>
-    <div class="row"><button class="btn sm" id="manageUsers" type="button" hidden>Kelola pengguna</button><button class="btn sm" id="refreshNow" type="button">Muat ulang data</button><button class="btn sm danger" id="logoutBtn" type="button">Keluar</button></div>
+    <div class="row"><button class="btn sm" id="manageUsers" type="button" hidden>Kelola pengguna</button><button class="btn sm" id="auditBtn" type="button" hidden>Audit trail</button><button class="btn sm" id="refreshNow" type="button">Muat ulang data</button><button class="btn sm danger" id="logoutBtn" type="button">Keluar</button></div>
     <div><b>Tampilan</b><span>Terang adalah bawaan. Pilihan ini hanya berlaku di perangkat ini.</span></div>
     <div class="row" role="group" aria-label="Tampilan"><button class="btn sm thm" data-thm="light" type="button">Terang</button><button class="btn sm thm" data-thm="dark" type="button">Gelap</button><button class="btn sm thm" data-thm="system" type="button">Ikuti perangkat</button></div>
   </div>
@@ -1458,7 +1470,7 @@ async function afterAuth(){
   try{await loadAll()}catch(e){console.error(e);showLogin('error',authMsg(e));return}
   if(!hasAny()){showLogin('pending');return}
   $('#acctInfo').textContent=`${me.name?me.name+' · ':''}${shownId(me.email)} — ${accessLabel()}`;
-  $('#manageUsers').hidden=!me.admin;
+  $('#manageUsers').hidden=!me.admin;$('#auditBtn').hidden=!me.admin;
   document.body.classList.toggle('noadm',!me.admin);
   unlock();render();
 }
@@ -1512,6 +1524,56 @@ $('#manageUsers').onclick=async()=>{
     });
   }catch(e){$('#uList').innerHTML='<div class="empty">Daftar pengguna tidak bisa dimuat.</div>';console.error(e)}
 };
+/* ---------- audit trail ---------- */
+const AENT={activities:'Activity',activity_tasks:'Task',documents:'Dokumen SR',app_roles:'Akses pengguna'};
+const AACT={insert:['Tambah','s-ok'],update:['Ubah','s-info'],delete:['Hapus','s-bad']};
+const AFLD={name:'Nama',description:'Deskripsi',owner:'PIC',status:'Status',start_date:'Mulai',end_date:'Selesai',method:'Metode',procure:'Pengadaan',sr:'No. SR',budget:'Anggaran',spent:'Realisasi',note:'Catatan',tender:'Tender',direct:'Penunjukan langsung',vendors:'Vendor',risks:'Risiko',issues:'Issue',due_date:'Target',progress:'Progres',milestone:'Milestone',title:'Judul',project:'Project',pm:'PM',fam:'FAM',value:'Nilai',doc_date:'Tgl SR',items:'PR/PO',activity_id:'Activity',is_admin:'Admin',perms:'Akses',email:'Akun'};
+const AHIDE=new Set(['id','user_id']);
+const aval=v=>{if(v===null||v===undefined||v==='')return '–';if(typeof v==='boolean')return v?'Ya':'Tidak';if(Array.isArray(v))return v.length+' item';if(typeof v==='object'){if('activity' in v||'documents' in v)return `Activity: ${ACC[v.activity]||'–'}, Documents: ${ACC[v.documents]||'–'}`;return Object.entries(v).filter(([k,x])=>x!==''&&x!==null).map(([k,x])=>k+': '+x).join(', ')||'–'}return String(v)};
+const aShown=n=>String(n||'').replace(/@activities\.local$/,'');
+function aChanges(r){
+  const ch=r.changes||{};
+  let keys=Object.keys(ch).filter(k=>!AHIDE.has(k));
+  if(r.action!=='update')keys=keys.filter(k=>['name','title','status','owner','pm','sr','is_admin','perms','progress','due_date','end_date'].includes(k)&&aval(ch[k][r.action==='insert'?'new':'old'])!=='–');
+  return keys.map(k=>{const c=ch[k],lbl=AFLD[k]||k;
+    if(r.action==='insert')return `<li><span class="f">${esc(lbl)}</span>${esc(aval(c.new))}</li>`;
+    if(r.action==='delete')return `<li><span class="f">${esc(lbl)}</span>${esc(aval(c.old))}</li>`;
+    if(Array.isArray(c.old)||Array.isArray(c.new)){const a=Array.isArray(c.old)?c.old.length:0,b=Array.isArray(c.new)?c.new.length:0;return `<li><span class="f">${esc(lbl)}</span>${a===b?`isi diubah (${b} item)`:`<del>${a} item</del> → <ins>${b} item</ins>`}</li>`}
+    return `<li><span class="f">${esc(lbl)}</span><del>${esc(aval(c.old))}</del> → <ins>${esc(aval(c.new))}</ins></li>`}).join('');
+}
+let aRows=[],aTotal=0;
+async function auditLoad(append){
+  const q=$('#aQ').value.trim(),ent=$('#aEnt').value||null,since=$('#aFrom').value||null,until=$('#aTo').value||null;
+  const box=$('#aList');if(!append){box.innerHTML='<div class="empty">Memuat…</div>';aRows=[]}
+  try{
+    const j=ok(await neon.rpc('get_audit',{lim:100,off:append?aRows.length:0,q:q||null,ent,since,until}));
+    aTotal=j.total||0;aRows=aRows.concat(j.rows||[]);
+    box.innerHTML=aRows.length?aRows.map(r=>{const a=AACT[r.action]||[r.action,'s-mute'];return `<div class="arow2"><div class="ahd"><span class="t">${new Date(r.at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span><b>${esc(r.user||'Sistem')}</b>${pill(a[0],a[1])}</div><div class="aobj">${esc(AENT[r.entity]||r.entity)}: <b>${esc(r.entity==='app_roles'?aShown(r.name):r.name||r.entity_id||'')}</b>${r.parent?` <span>· ${esc(r.parent)}</span>`:''}</div>${(()=>{const c=aChanges(r);return c?`<ul class="achg">${c}</ul>`:''})()}</div>`}).join(''):'<div class="empty">Belum ada catatan perubahan untuk filter ini.</div>';
+    $('#aInfo').textContent=`${aRows.length} dari ${aTotal} catatan`;
+    $('#aMore').hidden=aRows.length>=aTotal;
+  }catch(e){console.error(e);box.innerHTML='<div class="empty">Audit trail tidak bisa dimuat.</div>'}
+}
+$('#auditBtn').onclick=()=>{
+  $('#dataMenu').hidden=true;
+  const m=$('#modal');
+  m.innerHTML=`<div class="scrim" id="aScrim"><div class="dlg wide" role="dialog" aria-modal="true" aria-labelledby="aT"><h3 id="aT">Audit trail</h3><p style="margin:-6px 0 12px;color:var(--muted);font-size:13px">Catatan otomatis setiap penambahan, perubahan, dan penghapusan data serta perubahan akses pengguna. Catatan tidak bisa diubah atau dihapus, dan hanya admin yang bisa melihatnya.</p>
+    <div class="afil"><input type="search" id="aQ" placeholder="Cari nama, activity, nilai…" aria-label="Cari"><select id="aEnt" aria-label="Jenis data"><option value="">Semua data</option><option value="activities">Activity</option><option value="activity_tasks">Task</option><option value="documents">Dokumen SR</option><option value="app_roles">Akses pengguna</option></select><input type="date" id="aFrom" aria-label="Dari tanggal"><input type="date" id="aTo" aria-label="Sampai tanggal"></div>
+    <div class="code" id="aInfo" style="margin-bottom:6px"></div><div id="aList"></div>
+    <div class="foot"><button class="btn" type="button" id="aExp">Export Excel</button><button class="btn" type="button" id="aMore" hidden>Muat lebih banyak</button><span class="sp"></span><button class="btn" type="button" id="aClose">Tutup</button></div></div></div>`;
+  const close=()=>{m.innerHTML=''};$('#aClose').onclick=close;$('#aScrim').onclick=e=>{if(e.target.id==='aScrim')close()};
+  let t=null;$('#aQ').oninput=()=>{clearTimeout(t);t=setTimeout(()=>auditLoad(false),350)};
+  ['#aEnt','#aFrom','#aTo'].forEach(id=>$(id).onchange=()=>auditLoad(false));
+  $('#aMore').onclick=()=>auditLoad(true);
+  $('#aExp').onclick=async()=>{
+    if(!window.XLSX){toast('Modul Excel belum termuat. Coba lagi sebentar.');return}
+    try{const j=ok(await neon.rpc('get_audit',{lim:1000,off:0,q:$('#aQ').value.trim()||null,ent:$('#aEnt').value||null,since:$('#aFrom').value||null,until:$('#aTo').value||null}));
+      const rows=[];(j.rows||[]).forEach(r=>{const ch=r.changes||{};const ks=Object.keys(ch).filter(k=>!AHIDE.has(k));(ks.length?ks:['']).forEach(k=>rows.push({'Waktu':new Date(r.at).toLocaleString('id-ID'),'Pengguna':r.user||'Sistem','Aksi':(AACT[r.action]||[r.action])[0],'Jenis data':AENT[r.entity]||r.entity,'Objek':r.entity==='app_roles'?aShown(r.name):(r.name||r.entity_id||''),'Activity':r.parent||'','Field':k?(AFLD[k]||k):'','Nilai lama':k?aval(ch[k].old):'','Nilai baru':k?aval(ch[k].new):''}))});
+      const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.length?rows:[{}]),'Audit trail');
+      offer(`audit-trail-${stamp()}.xlsx`,new Uint8Array(XLSX.write(wb,{bookType:'xlsx',type:'array'})));
+    }catch(e){console.error(e);toast('Export audit trail gagal.')}
+  };
+  auditLoad(false);
+};
 async function boot(){
   showLogin('loading');
   try{
@@ -1525,7 +1587,7 @@ boot();
 render();
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 /* pembaruan otomatis: muat ulang halaman jika ada versi aplikasi baru */
-const APP_V='20261021162149';
+const APP_V='20261021174851';
 async function checkVer(){try{const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'});const j=await r.json();if(j.v&&j.v!==APP_V&&!$('#modal').innerHTML.trim()&&!Object.keys(chains).length){location.reload()}}catch(e){}}
 setInterval(()=>{if(!document.hidden)checkVer()},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkVer()});
